@@ -138,7 +138,6 @@ RUN Rscript -e 'install.packages(c( \
     "RColorBrewer", \
     "ggrastr", \
     "hdf5r", \
-    "qs", \
     "reticulate", \
     "Rcpp", \
     "RcppArmadillo", \
@@ -184,7 +183,8 @@ RUN Rscript -e 'remotes::install_version("SeuratObject", version = "5.0.2", repo
 RUN Rscript -e 'remotes::install_version("Seurat", version = "5.4.0", repos = "https://cloud.r-project.org", upgrade = "never")'
 
 # Optional but commonly useful for your workflows
-RUN Rscript -e 'install.packages("BPCells", repos = "https://cloud.r-project.org", Ncpus = 4L)'
+RUN Rscript -e 'remotes::install_url("https://cran.r-project.org/src/contrib/Archive/qs/qs_0.27.3.tar.gz", repos = NULL, type = "source", dependencies = TRUE)'
+RUN Rscript -e 'remotes::install_github("bnprks/BPCells/r", upgrade = "never", dependencies = TRUE)'
 RUN Rscript -e 'remotes::install_github("mojaveazure/seurat-disk", upgrade = "never")'
 
 # -----------------------------------------------------------------------------

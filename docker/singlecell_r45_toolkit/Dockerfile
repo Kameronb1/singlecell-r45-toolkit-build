@@ -1,97 +1,67 @@
-FROM bioconductor/bioconductor_docker:RELEASE_3_21
-
-# =============================================================================
-# PURPOSE
-#   Robust single-cell toolkit image for Seurat v5 / Bioconductor / scDblFinder
-#   plus a clean Python virtualenv for future interoperability.
-#
-# DESIGN
-#   - Base on Bioconductor 3.21 / R 4.5 to avoid old-R package dead ends
-#   - Install broad OS deps needed for graphics / HDF5 / compilation
-#   - Never mutate distro-managed Python with pip; use /opt/pyenv instead
-#   - Install core CRAN + Bioconductor single-cell packages
-#   - Pin Seurat to 5.4.0
-# =============================================================================
-
-USER root
+FROM rocker/r-ver:4.5.2
 
 SHELL ["/bin/bash", "-lc"]
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Etc/UTC
-ENV PIP_ROOT_USER_ACTION=ignore
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV TZ=America/Chicago
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 
 # -----------------------------------------------------------------------------
-# SECTION 1  OS-LEVEL DEPENDENCIES
+# SYSTEM DEPENDENCIES
 # -----------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    apt-transport-https \
-    ca-certificates \
-    curl \
-    wget \
-    git \
-    git-lfs \
-    unzip \
-    zip \
-    nano \
-    vim \
-    less \
-    htop \
-    jq \
-    locales \
-    tzdata \
     build-essential \
+    g++ \
+    gcc \
     gfortran \
     make \
     cmake \
+    git \
+    curl \
+    wget \
+    ca-certificates \
     pkg-config \
-    software-properties-common \
+    python3 \
+    python3-pip \
+    python3-dev \
+    zlib1g-dev \
     libbz2-dev \
-    libcairo2-dev \
+    liblzma-dev \
+    libzstd-dev \
     libcurl4-openssl-dev \
-    libfftw3-dev \
+    libssl-dev \
+    libxml2-dev \
+    libhdf5-dev \
+    libudunits2-dev \
+    libgdal-dev \
+    libgeos-dev \
+    libproj-dev \
+    libglpk-dev \
+    libharfbuzz-dev \
+    libfribidi-dev \
+    libcairo2-dev \
     libfontconfig1-dev \
     libfreetype6-dev \
-    libfribidi-dev \
-    libgit2-dev \
-    libglpk-dev \
-    libgsl-dev \
-    libharfbuzz-dev \
-    libhdf5-dev \
-    libjpeg-dev \
-    liblzma-dev \
-    libmagick++-dev \
     libpng-dev \
-    libproj-dev \
-    libreadline-dev \
-    libsodium-dev \
-    libsqlite3-dev \
-    libssl-dev \
     libtiff5-dev \
-    libudunits2-dev \
-    libxml2-dev \
+    libjpeg-dev \
     libxt-dev \
-    zlib1g-dev \
-    python3 \
-    python3-dev \
-    python3-pip \
-    python3-setuptools \
-    python3-wheel \
-    python3-venv \
+    libsqlite3-dev \
+    libgit2-dev \
+    libopenblas-dev \
+    liblapack-dev \
+    libomp-dev \
+    pandoc \
+    fonts-dejavu-core \
+    fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
-# SECTION 2  PYTHON VIRTUALENV
+# PYTHON BASICS
 # -----------------------------------------------------------------------------
-RUN python3 -m venv /opt/pyenv
-ENV PATH="/opt/pyenv/bin:${PATH}"
-
-RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
-
-# Keep Python basics modest but useful for future tasks
-RUN python -m pip install --no-cache-dir \
+RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
+RUN python3 -m pip install --no-cache-dir \
     numpy \
     scipy \
     pandas \
@@ -103,92 +73,75 @@ RUN python -m pip install --no-cache-dir \
     jupyterlab
 
 # -----------------------------------------------------------------------------
-# SECTION 3  R ENVIRONMENT DEFAULTS
+# R BASICS
 # -----------------------------------------------------------------------------
-RUN echo 'options(repos = c(CRAN = "https://cloud.r-project.org"))' >> /usr/local/lib/R/etc/Rprofile.site && \
-    echo 'Sys.setenv(R_REMOTES_NO_ERRORS_FROM_WARNINGS = "true")' >> /usr/local/lib/R/etc/Rprofile.site
-
-ENV MAKEFLAGS="-j4"
+RUN Rscript -e 'options(repos = c(CRAN = "https://cloud.r-project.org")); \
+                install.packages(c("remotes","pak","BiocManager"), Ncpus = 4L)'
 
 # -----------------------------------------------------------------------------
-# SECTION 4  R PACKAGE INSTALLATION HELPERS
+# CRAN PACKAGES
 # -----------------------------------------------------------------------------
-RUN Rscript -e 'install.packages(c("remotes","BiocManager"), Ncpus = 4L)'
+RUN Rscript -e 'options(repos = c(CRAN = "https://cloud.r-project.org")); \
+                install.packages(c( \
+                  "Rcpp","RcppEigen","RcppArmadillo","RcppHNSW","RcppAnnoy","RcppParallel", \
+                  "Matrix","data.table","future","future.apply","progressr","glue","cli", \
+                  "rlang","vctrs","generics","lifecycle","magrittr","withr","pkgconfig", \
+                  "utf8","pillar","tibble","tidyselect","dplyr","purrr","stringr","stringi", \
+                  "ggplot2","patchwork","cowplot","viridis","viridisLite","scales","ggrastr", \
+                  "hdf5r","reticulate","R.utils","matrixStats","RSpectra","irlba","RcppML", \
+                  "sitmo","BH","RcppAnnoy","jsonlite","yaml","htmltools","R6","digest", \
+                  "globals","listenv","parallelly","sp","spam","dotCall64","maps","fields", \
+                  "RColorBrewer","here","fs","rappdirs","pkgbuild","pkgload","testthat", \
+                  "knitr","rmarkdown","sctransform","harmony"), \
+                  Ncpus = 4L)'
 
 # -----------------------------------------------------------------------------
-# SECTION 5  CRAN PACKAGES
+# BIOCONDUCTOR CORE + SINGLE-CELL STACK
 # -----------------------------------------------------------------------------
-RUN Rscript -e 'install.packages(c( \
-    "data.table", \
-    "dplyr", \
-    "tibble", \
-    "stringr", \
-    "glue", \
-    "cli", \
-    "fs", \
-    "here", \
-    "jsonlite", \
-    "yaml", \
-    "future", \
-    "future.apply", \
-    "patchwork", \
-    "cowplot", \
-    "ggplot2", \
-    "viridis", \
-    "RColorBrewer", \
-    "ggrastr", \
-    "hdf5r", \
-    "reticulate", \
-    "Rcpp", \
-    "RcppArmadillo", \
-    "RcppHNSW", \
-    "irlba", \
-    "uwot", \
-    "sctransform", \
-    "harmony", \
-    "clustree", \
-    "igraph", \
-    "devtools", \
-    "sessioninfo" \
-  ), Ncpus = 4L)'
-
-# -----------------------------------------------------------------------------
-# SECTION 6  BIOCONDUCTOR SINGLE-CELL STACK
-# -----------------------------------------------------------------------------
+RUN Rscript -e 'BiocManager::install(version = "3.22", ask = FALSE, update = TRUE)'
 RUN Rscript -e 'BiocManager::install(c( \
-    "SingleCellExperiment", \
-    "SummarizedExperiment", \
-    "S4Vectors", \
-    "IRanges", \
-    "GenomicRanges", \
-    "BiocGenerics", \
-    "BiocParallel", \
-    "DelayedArray", \
-    "DelayedMatrixStats", \
-    "MatrixGenerics", \
-    "DropletUtils", \
-    "scater", \
-    "scuttle", \
-    "scran", \
-    "bluster", \
-    "batchelor", \
-    "glmGamPoi", \
-    "scDblFinder" \
-  ), ask = FALSE, update = FALSE, Ncpus = 4L)'
+                  "BiocGenerics","Biobase","S4Vectors","IRanges","GenomeInfoDb","GenomicRanges", \
+                  "SummarizedExperiment","SingleCellExperiment","DelayedArray","DelayedMatrixStats", \
+                  "MatrixGenerics","beachmat","BiocParallel","XVector","Rsamtools","rtracklayer", \
+                  "Biostrings","GenomicAlignments","BiocNeighbors","BiocSingular","bluster", \
+                  "scuttle","scran","scater","scDblFinder","glmGamPoi"), \
+                  ask = FALSE, update = TRUE)'
 
 # -----------------------------------------------------------------------------
-# SECTION 7  SEURAT / RELATED
+# SEURAT
 # -----------------------------------------------------------------------------
-RUN Rscript -e 'remotes::install_version("SeuratObject", version = "5.0.2", repos = "https://cloud.r-project.org", upgrade = "never")'
-RUN Rscript -e 'remotes::install_version("Seurat", version = "5.4.0", repos = "https://cloud.r-project.org", upgrade = "never")'
+RUN Rscript -e 'options(repos = c(CRAN = "https://cloud.r-project.org")); \
+                install.packages(c("SeuratObject","Seurat"), Ncpus = 4L)'
 
-# Optional but commonly useful for your workflows
-RUN Rscript -e 'remotes::install_url("https://cran.r-project.org/src/contrib/Archive/qs/qs_0.27.3.tar.gz", repos = NULL, type = "source", dependencies = TRUE)'
-RUN Rscript -e 'remotes::install_github("bnprks/BPCells/r", upgrade = "never", dependencies = TRUE)'
+# -----------------------------------------------------------------------------
+# qs + dependencies
+# qs is archived, so install its required CRAN deps first, then archived qs
+# -----------------------------------------------------------------------------
+RUN Rscript -e 'options(repos = c(CRAN = "https://cloud.r-project.org")); \
+                install.packages(c("RApiSerialize","stringfish"), Ncpus = 4L)'
+
+RUN Rscript -e 'remotes::install_url( \
+                  "https://cran.r-project.org/src/contrib/Archive/qs/qs_0.27.3.tar.gz", \
+                  repos = c(CRAN = "https://cloud.r-project.org"), \
+                  type = "source", dependencies = FALSE)'
+
+# -----------------------------------------------------------------------------
+# BPCells
+# Avoid GitHub API rate limits by installing from release tarball, then subdir /r
+# -----------------------------------------------------------------------------
+RUN cd /tmp && \
+    curl -L https://github.com/bnprks/BPCells/archive/refs/tags/v0.3.1.tar.gz -o BPCells_v0.3.1.tar.gz && \
+    tar -xzf BPCells_v0.3.1.tar.gz && \
+    Rscript -e 'remotes::install_local("/tmp/BPCells-0.3.1/r", upgrade = "never", dependencies = TRUE)' && \
+    rm -rf /tmp/BPCells_v0.3.1.tar.gz /tmp/BPCells-0.3.1
+
+# -----------------------------------------------------------------------------
+# OPTIONAL BUT USEFUL
+# -----------------------------------------------------------------------------
 RUN Rscript -e 'remotes::install_github("mojaveazure/seurat-disk", upgrade = "never")'
 
 # -----------------------------------------------------------------------------
-# SECTION 8  SANITY CHECKS
+# SANITY CHECK
 # -----------------------------------------------------------------------------
 RUN Rscript -e 'cat("R version: ", R.version.string, "\n", sep=""); \
                 pkgs <- c("Seurat","SeuratObject","BPCells","scDblFinder","scater","scuttle","scran","bluster","glmGamPoi","hdf5r","qs","reticulate","sctransform","harmony"); \
@@ -196,24 +149,5 @@ RUN Rscript -e 'cat("R version: ", R.version.string, "\n", sep=""); \
                 if (length(miss)) stop(paste("Missing R packages:", paste(miss, collapse=", "))); \
                 cat("R package sanity check passed\n")'
 
-RUN python - <<'PYEOF'
-import sys
-mods = ["numpy", "scipy", "pandas", "h5py", "anndata", "scanpy", "sklearn"]
-missing = []
-for m in mods:
-    try:
-        __import__(m)
-    except Exception:
-        missing.append(m)
-if missing:
-    raise SystemExit("Missing Python modules: " + ", ".join(missing))
-print("Python sanity check passed")
-print(sys.version)
-PYEOF
-
-# -----------------------------------------------------------------------------
-# SECTION 9  DEFAULT WORKDIR
-# -----------------------------------------------------------------------------
-WORKDIR /workspace
-
+WORKDIR /work
 CMD ["/bin/bash"]

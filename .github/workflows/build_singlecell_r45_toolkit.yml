@@ -3,20 +3,36 @@ name: build-singlecell-r45-toolkit
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     paths:
       - "docker/singlecell_r45_toolkit/Dockerfile"
       - ".github/workflows/build_singlecell_r45_toolkit.yml"
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_REPO: singlecell-r45-toolkit
+
 jobs:
-  build:
+  build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Normalize owner to lowercase for GHCR
+        shell: bash
+        run: |
+          echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+          echo "IMAGE_URI=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${IMAGE_REPO}" >> "$GITHUB_ENV"
+
+      - name: Show resolved image URI
+        run: |
+          echo "Publishing image to: $IMAGE_URI"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -27,11 +43,11 @@ jobs:
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: docker/singlecell_r45_toolkit
@@ -39,5 +55,5 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ghcr.io/${{ github.repository_owner }}/singlecell-r45-toolkit:bioc321-seurat540-20260406
-            ghcr.io/${{ github.repository_owner }}/singlecell-r45-toolkit:latest
+            ${{ env.IMAGE_URI }}:bioc321-seurat540-20260406
+            ${{ env.IMAGE_URI }}:latest

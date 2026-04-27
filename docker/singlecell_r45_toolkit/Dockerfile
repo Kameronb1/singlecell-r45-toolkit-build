@@ -167,43 +167,18 @@ RUN Rscript -e 'options(repos = c(CRAN = "https://cloud.r-project.org")); \
 #   Prove the image can load the full required stack without using any mounted
 #   cluster-side R library path.
 # -----------------------------------------------------------------------------
-RUN Rscript -e 'suppressPackageStartupMessages({ \
-      library(Seurat); \
-      library(SeuratObject); \
-      library(Matrix); \
-      library(qs); \
-      library(dplyr); \
-      library(ranger); \
-      library(pushoverr); \
-      library(BPCells); \
-      library(hdf5r); \
-      library(glmGamPoi); \
-      library(harmony); \
-      library(sctransform); \
-      library(scDblFinder); \
-      library(scater); \
-      library(scuttle); \
-      library(scran); \
-      library(bluster); \
-    }); \
-    cat("R version:", R.version.string, "\n"); \
-    cat("Seurat:", as.character(packageVersion("Seurat")), "\n"); \
-    cat("qs:", as.character(packageVersion("qs")), "\n"); \
-    cat("ranger:", as.character(packageVersion("ranger")), "\n"); \
-    cat("pushoverr:", as.character(packageVersion("pushoverr")), "\n"); \
-    pkgs <- c("Seurat","SeuratObject","Matrix","qs","dplyr","ranger","pushoverr", \
-              "BPCells","hdf5r","glmGamPoi","harmony","sctransform", \
-              "scDblFinder","scater","scuttle","scran","bluster"); \
-    print(data.frame( \
-      package = pkgs, \
-      version = sapply(pkgs, function(p) as.character(packageVersion(p))), \
-      location = sapply(pkgs, function(p) dirname(dirname(system.file(package = p)))), \
-      row.names = NULL \
-    )); \
-    bad <- pkgs[grepl("/storage1/", sapply(pkgs, function(p) dirname(dirname(system.file(package = p)))) )]; \
-    if (length(bad)) stop(paste("Packages unexpectedly resolved from mounted cluster Rlibs:", paste(bad, collapse = ", "))); \
-    cat("Required package sanity check passed\n")'
 
 WORKDIR /work
 
 CMD ["/bin/bash"]
+
+# >>> FINAL HARDENING PATCH: ranger/pushoverr + verbose validation
+# This block intentionally lives after the main Bioconductor/Seurat stack.
+# It installs ranger and pushoverr into the image default R library and then
+# validates every required package with package-by-package diagnostics.
+COPY docker/singlecell_r45_toolkit/install_patch_packages.R /opt/install_patch_packages.R
+RUN Rscript /opt/install_patch_packages.R
+
+COPY docker/singlecell_r45_toolkit/validate_required_packages.R /opt/validate_required_packages.R
+RUN Rscript /opt/validate_required_packages.R
+# <<< FINAL HARDENING PATCH

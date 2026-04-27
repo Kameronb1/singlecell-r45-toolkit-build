@@ -7,12 +7,13 @@ on:
 
 env:
   IMAGE_NAME: ghcr.io/kameronb1/singlecell-r45-toolkit
-  IMAGE_TAG: bioc322-r452-20260406
+  IMAGE_TAG: bioc322-r452-20260427
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
       packages: write
